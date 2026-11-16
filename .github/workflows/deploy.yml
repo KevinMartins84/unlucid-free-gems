@@ -48,12 +48,14 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
       - name: Configure ADMIN_TOKEN secret
-        if: ${{ secrets.UNLUCID_ADMIN_TOKEN != '' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           UNLUCID_ADMIN_TOKEN: ${{ secrets.UNLUCID_ADMIN_TOKEN }}
-        run: printf '%s' "$UNLUCID_ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
+        run: |
+          if [ -n "$UNLUCID_ADMIN_TOKEN" ]; then
+            printf '%s' "$UNLUCID_ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
+          fi
 
   github-pages:
     needs: test
