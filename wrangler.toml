@@ -1,0 +1,15 @@
+name = "unlucid-free-gems"
+main = "src/index.ts"
+compatibility_date = "2025-02-14"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "unlucid-gems"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+[triggers]
+crons = ["*/5 * * * *"]

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unlucid free gems</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <h1>Unlucid free gems</h1>
+        <p class="muted">
+          Sessions are sensitive. Cookie values are shown in full on this page. If auth fails, the timer pauses that
+          row until you paste a fresh cookie and run a successful Claim.
+        </p>
+      </header>
+
+      <section class="card" id="auth-card">
+        <h2>Connection</h2>
+        <label>API base URL <input id="api-base" type="url" placeholder="https://unlucid-free-gems.&lt;account&gt;.workers.dev" /></label>
+        <label>Admin token <input id="admin-token" type="password" autocomplete="current-password" /></label>
+        <button type="button" id="save-settings">Save settings</button>
+      </section>
+
+      <div id="message" hidden></div>
+
+      <section class="card">
+        <h2>Add row</h2>
+        <div class="grid">
+          <label>Login label <input id="new-login" /></label>
+          <label>Cookie header value <textarea id="new-cookie" rows="3"></textarea></label>
+          <label>Next free gems at (UTC, optional) <input id="new-next" placeholder="e.g. 2026-03-23T12:00:00Z — empty = claim ASAP" /></label>
+        </div>
+        <button type="button" id="add-row">Add</button>
+      </section>
+
+      <section class="card">
+        <h2>Rows</h2>
+        <div id="rows-loading" class="muted">Loading…</div>
+        <table id="rows-table" hidden>
+          <thead>
+            <tr>
+              <th>Id</th>
+              <th>Login</th>
+              <th>Status</th>
+              <th>Next free (UTC)</th>
+              <th>Cookie (preview)</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows-body"></tbody>
+        </table>
+      </section>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

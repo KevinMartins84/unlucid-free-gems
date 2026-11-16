@@ -1,0 +1,19 @@
+{
+  "name": "unlucid-free-gems",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone admin + scheduler for automated Unlucid.ai free gem claims",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute unlucid-gems --remote --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute unlucid-gems --local --file=./schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261116.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5",
+    "wrangler": "^4.0.0"
+  }
+}
