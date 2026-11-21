@@ -14,6 +14,10 @@ concurrency:
   group: deploy-unlucid-free-gems
   cancel-in-progress: true
 
+env:
+  WORKER_NAME: unlucid-free-gems
+  D1_NAME: unlucid-gems
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -22,40 +26,92 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - run: npm test
 
   cloudflare:
     needs: test
     runs-on: ubuntu-latest
-    continue-on-error: true
+    outputs:
+      worker_url: ${{ steps.deploy_summary.outputs.worker_url }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      UNLUCID_ADMIN_TOKEN: ${{ secrets.UNLUCID_ADMIN_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install
-      - name: Apply D1 schema
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 execute unlucid-gems --remote --file=./schema.sql
-      - name: Deploy Worker + static assets
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
-      - name: Configure ADMIN_TOKEN secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          UNLUCID_ADMIN_TOKEN: ${{ secrets.UNLUCID_ADMIN_TOKEN }}
+          cache: npm
+      - run: npm ci
+      - name: Require Cloudflare credentials
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets before deploying."
+            exit 1
+          fi
+      - name: Resolve D1 database id
+        id: d1
+        run: |
+          set -euo pipefail
+          DB_ID="$D1_DATABASE_ID"
+          if [ -z "$DB_ID" ]; then
+            DB_ID="$(npx wrangler d1 list 2>/dev/null | jq -r --arg n "$D1_NAME" '.[] | select(.name==$n) | .uuid' | head -1)"
+          fi
+          if [ -z "$DB_ID" ] || [ "$DB_ID" = "null" ]; then
+            echo "Creating D1 database $D1_NAME"
+            CREATE_JSON="$(npx wrangler d1 create "$D1_NAME" 2>/dev/null)"
+            DB_ID="$(echo "$CREATE_JSON" | jq -r '.d1_uuid // .uuid // .database_id // empty' | head -1)"
+          fi
+          if [ -z "$DB_ID" ] || [ "$DB_ID" = "null" ]; then
+            echo "::error::Could not resolve or create D1 database id for $D1_NAME"
+            exit 1
+          fi
+          echo "database_id=$DB_ID" >> "$GITHUB_OUTPUT"
+          sed -i "s/^database_id = .*/database_id = \"$DB_ID\"/" wrangler.toml
+          echo "Using D1 database id: $DB_ID"
+      - name: Apply D1 schema
+        run: npx wrangler d1 execute "$D1_NAME" --remote --file=./schema.sql
+      - name: Deploy Worker + static assets
+        id: wrangler_deploy
+        run: |
+          set -euo pipefail
+          npm run deploy 2>&1 | tee deploy-output.txt
+          URL="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy-output.txt | grep "$WORKER_NAME" | head -1 || true)"
+          if [ -z "$URL" ]; then
+            URL="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy-output.txt | head -1 || true)"
+          fi
+          echo "worker_url=$URL" >> "$GITHUB_OUTPUT"
+      - name: Configure Worker secrets
+        run: |
+          set -euo pipefail
           if [ -n "$UNLUCID_ADMIN_TOKEN" ]; then
             printf '%s' "$UNLUCID_ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
+          else
+            echo "::warning::UNLUCID_ADMIN_TOKEN is not set; /api routes will reject requests until ADMIN_TOKEN is configured."
           fi
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            printf '%s' "$TELEGRAM_BOT_TOKEN" | npx wrangler secret put TELEGRAM_BOT_TOKEN
+          fi
+          if [ -n "$TELEGRAM_CHAT_ID" ]; then
+            printf '%s' "$TELEGRAM_CHAT_ID" | npx wrangler secret put TELEGRAM_CHAT_ID
+          fi
+      - name: Deploy summary
+        id: deploy_summary
+        if: always() && steps.wrangler_deploy.outcome == 'success'
+        run: |
+          URL="${{ steps.wrangler_deploy.outputs.worker_url }}"
+          echo "## Cloudflare Worker" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Live URL:** $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "D1 database: \`$D1_NAME\` (\`${{ steps.d1.outputs.database_id }}\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "worker_url=$URL" >> "$GITHUB_OUTPUT"
 
   github-pages:
     needs: test

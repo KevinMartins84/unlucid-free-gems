@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { tryParseRemainingMs, tryParseSvelteKitAction } from "../src/claim";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import {
+  parseNextFreeGemsFromJsonBody,
+  tryClaimAsync,
+  tryParseRemainingMs,
+  tryParseSvelteKitAction,
+} from "../src/claim";
 
 describe("tryParseSvelteKitAction", () => {
   it("parses already claimed 409", () => {
@@ -26,6 +31,17 @@ describe("tryParseSvelteKitAction", () => {
     expect(parsed.status).toBe(401);
     expect(parsed.message).toContain("Sign in");
   });
+
+  it("parses forbidden 403", () => {
+    const json = JSON.stringify({
+      type: "failure",
+      status: 403,
+      data: `[{"message":1},"Forbidden"]`,
+    });
+    const parsed = tryParseSvelteKitAction(json);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.status).toBe(403);
+  });
 });
 
 describe("tryParseRemainingMs", () => {
@@ -35,5 +51,52 @@ describe("tryParseRemainingMs", () => {
     const parsed = tryParseRemainingMs(json);
     expect(parsed.ok).toBe(true);
     expect(parsed.remainingMs).toBe(85769485);
+  });
+});
+
+describe("parseNextFreeGemsFromJsonBody", () => {
+  it("reads user.nextFreeGemsAt ms", () => {
+    const ms = Date.now() + 3600_000;
+    const iso = parseNextFreeGemsFromJsonBody(JSON.stringify({ user: { nextFreeGemsAt: ms } }));
+    expect(iso).toBe(new Date(ms).toISOString());
+  });
+});
+
+describe("tryClaimAsync HTTP handling", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns auth failure on sveltekit 401", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ type: "failure", status: 401, data: '"Sign in"' }), { status: 200 })),
+    );
+    const result = await tryClaimAsync("session=abc");
+    expect(result.authFailure).toBe(true);
+    expect(result.error).toContain("HTTP 401");
+  });
+
+  it("syncs next time on sveltekit 409 when gems data returns remainingMs", async () => {
+    const gemsJson =
+      '{"type":"data","nodes":[{"type":"data","data":[{"canClaim":7,"remainingMs":83},3600000],"uses":{}}]}';
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("__data.json")) {
+        return new Response(gemsJson, { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          type: "failure",
+          status: 409,
+          data: `[{"message":1},"Already claimed"]`,
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await tryClaimAsync("session=abc");
+    expect(result.authFailure).toBe(false);
+    expect(result.nextFreeGemsAtUtc).not.toBeNull();
+    expect(result.error).toContain("Already claimed");
   });
 });

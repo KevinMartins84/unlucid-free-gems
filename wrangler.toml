@@ -9,6 +9,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "unlucid-gems"
+# CI or local setup must set a real id (Deploy workflow patches this when D1_DATABASE_ID is unset).
 database_id = "00000000-0000-0000-0000-000000000001"
 
 [triggers]
