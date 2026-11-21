@@ -45,6 +45,17 @@ describe("tryParseSvelteKitAction", () => {
 });
 
 describe("tryParseRemainingMs", () => {
+  it("resolves devalue index when canClaim value sits between (current unlucid shape)", () => {
+    const json = JSON.stringify({
+      type: "data",
+      nodes: [
+        { type: "data", data: [{ user: 1 }, "x"] },
+        { type: "data", data: [{ freeGems: 1 }, { canClaim: 2, remainingMs: 3 }, false, 1235056] },
+      ],
+    });
+    expect(tryParseRemainingMs(json)).toEqual({ ok: true, remainingMs: 1235056 });
+  });
+
   it("reads countdown from gems data json", () => {
     const json =
       '{"type":"data","nodes":[{"type":"data","data":[{"dailyFreeGems":80},{"amount":81,"claim":82},5,{"canClaim":7,"remainingMs":83},85769485],"uses":{}}]}';

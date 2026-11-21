@@ -59,6 +59,28 @@ function extractActionMessage(dataEl: unknown): string | null {
 
 export function tryParseRemainingMs(gemsDataJson: string): { ok: boolean; remainingMs: number } {
   if (!gemsDataJson.trim()) return { ok: false, remainingMs: 0 };
+  // SvelteKit __data.json uses devalue: objects hold indexes into the node's flat data array,
+  // e.g. {"canClaim":27,"remainingMs":28},false,1235056 → data[28] = 1235056.
+  try {
+    const root = JSON.parse(gemsDataJson) as { nodes?: Array<{ data?: unknown[] } | null> };
+    for (const node of root.nodes ?? []) {
+      const data = node?.data;
+      if (!Array.isArray(data)) continue;
+      for (const item of data) {
+        if (item && typeof item === "object" && !Array.isArray(item) && "remainingMs" in item) {
+          const idx = (item as Record<string, unknown>).remainingMs;
+          if (typeof idx === "number" && Number.isInteger(idx) && idx >= 0 && idx < data.length) {
+            const value = data[idx];
+            if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+              return { ok: true, remainingMs: value };
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // fall through to legacy regex
+  }
   const match = remainingMsValueRegex.exec(gemsDataJson);
   if (!match) return { ok: false, remainingMs: 0 };
   const remainingMs = Number(match[1]);
