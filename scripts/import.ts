@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -41,7 +41,8 @@ function main(): void {
     process.exit(1);
   }
 
-  const statements: string[] = ["BEGIN TRANSACTION;"];
+  // D1 remote execute rejects explicit BEGIN/COMMIT; the file is applied atomically.
+  const statements: string[] = [];
   let skipped = 0;
 
   for (const row of rows) {
@@ -55,22 +56,24 @@ function main(): void {
       `INSERT INTO UnlucidFreeGemsLogins (Id, Login, Cookie, NextFreeGemsAt, AuthBlocked) VALUES (${row.Id}, '${sqlEscape(row.Login.trim())}', '${sqlEscape(row.Cookie ?? "")}', '${sqlEscape(next)}', ${auth}) ON CONFLICT(Id) DO UPDATE SET Login=excluded.Login, Cookie=excluded.Cookie, NextFreeGemsAt=excluded.NextFreeGemsAt, AuthBlocked=excluded.AuthBlocked;`,
     );
   }
-  statements.push("COMMIT;");
-
-  if (statements.length <= 2) {
+  if (statements.length === 0) {
     console.error("No valid rows to import.");
     process.exit(1);
   }
 
   const dir = mkdtempSync(join(tmpdir(), "unlucid-import-"));
   const sqlPath = join(dir, "import.sql");
-  writeFileSync(sqlPath, statements.join("\n"), "utf8");
+  try {
+    writeFileSync(sqlPath, statements.join("\n"), { encoding: "utf8", mode: 0o600 });
+    execFileSync("npx", ["wrangler", "d1", "execute", "unlucid-gems", "--remote", "--yes", "--file", sqlPath], {
+      stdio: "inherit",
+    });
+  } finally {
+    // The SQL file contains cookie values; never leave it behind.
+    rmSync(dir, { recursive: true, force: true });
+  }
 
-  execFileSync("npx", ["wrangler", "d1", "execute", "unlucid-gems", "--remote", "--file", sqlPath], {
-    stdio: "inherit",
-  });
-
-  const upserted = statements.length - 2;
+  const upserted = statements.length;
   console.log(`Import finished: ${upserted} row(s) upserted, ${skipped} skipped. Cookie values were never logged.`);
 }
 

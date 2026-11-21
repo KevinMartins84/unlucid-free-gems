@@ -61,12 +61,12 @@ jobs:
           set -euo pipefail
           DB_ID="$D1_DATABASE_ID"
           if [ -z "$DB_ID" ]; then
-            DB_ID="$(npx wrangler d1 list 2>/dev/null | jq -r --arg n "$D1_NAME" '.[] | select(.name==$n) | .uuid' | head -1)"
+            DB_ID="$(npx wrangler d1 list --json | jq -r --arg n "$D1_NAME" '.[] | select(.name==$n) | .uuid' | head -1)"
           fi
           if [ -z "$DB_ID" ] || [ "$DB_ID" = "null" ]; then
             echo "Creating D1 database $D1_NAME"
-            CREATE_JSON="$(npx wrangler d1 create "$D1_NAME" 2>/dev/null)"
-            DB_ID="$(echo "$CREATE_JSON" | jq -r '.d1_uuid // .uuid // .database_id // empty' | head -1)"
+            npx wrangler d1 create "$D1_NAME"
+            DB_ID="$(npx wrangler d1 list --json | jq -r --arg n "$D1_NAME" '.[] | select(.name==$n) | .uuid' | head -1)"
           fi
           if [ -z "$DB_ID" ] || [ "$DB_ID" = "null" ]; then
             echo "::error::Could not resolve or create D1 database id for $D1_NAME"
