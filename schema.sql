@@ -7,3 +7,20 @@ CREATE TABLE IF NOT EXISTS UnlucidFreeGemsLogins (
 );
 
 CREATE INDEX IF NOT EXISTS IX_UnlucidFreeGemsLogins_NextFreeGemsAt ON UnlucidFreeGemsLogins (NextFreeGemsAt);
+
+CREATE TABLE IF NOT EXISTS ClaimLog (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  CreatedAt TEXT NOT NULL,
+  Login TEXT NOT NULL DEFAULT '',
+  Outcome TEXT NOT NULL DEFAULT '',
+  HttpStatus INTEGER,
+  Message TEXT,
+  NextFreeGemsAt TEXT
+);
+
+CREATE INDEX IF NOT EXISTS IX_ClaimLog_CreatedAt ON ClaimLog (CreatedAt DESC);
+
+CREATE TABLE IF NOT EXISTS WorkerMeta (
+  Key TEXT PRIMARY KEY,
+  Value TEXT NOT NULL DEFAULT ''
+);

@@ -132,6 +132,15 @@ async function trySyncNextFreeGemsFromGemsPage(cookie: string): Promise<string |
   return parsed;
 }
 
+export function parseNextFreeGemsFromJsonBody(json: string): string | null {
+  if (!json.trim()) return null;
+  try {
+    return tryFindNextFreeGemsAt(JSON.parse(json) as unknown);
+  } catch {
+    return null;
+  }
+}
+
 function tryFindNextFreeGemsAt(element: unknown): string | null {
   if (element && typeof element === "object") {
     if (Array.isArray(element)) {
@@ -203,8 +212,16 @@ export async function tryClaimAsync(cookie: string): Promise<{
   }
 
   if (response.ok) {
+    const fromBody = parseNextFreeGemsFromJsonBody(body);
+    if (fromBody) return { authFailure: false, error: null, nextFreeGemsAtUtc: fromBody };
     const synced = await trySyncNextFreeGemsFromGemsPage(cookie);
-    if (synced) return { authFailure: false, error: "Claim succeeded but response had no next time; synced from /gems/__data.json.", nextFreeGemsAtUtc: synced };
+    if (synced) {
+      return {
+        authFailure: false,
+        error: "Claim succeeded but response had no next time; synced from /gems/__data.json.",
+        nextFreeGemsAtUtc: synced,
+      };
+    }
     return { authFailure: false, error: `Response missing next free time. Body: ${truncate(body, 300)}`, nextFreeGemsAtUtc: null };
   }
 

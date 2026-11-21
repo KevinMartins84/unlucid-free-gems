@@ -9,7 +9,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "unlucid-gems"
-database_id = "00000000-0000-0000-0000-000000000001"
+database_id = "029d0422-9f5b-40fc-b675-f29669796f92"
 
 [triggers]
 crons = ["*/5 * * * *"]
